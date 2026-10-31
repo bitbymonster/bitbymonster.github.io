@@ -17,6 +17,8 @@
         left: 0;
         width: 100vw;
         height: 100vh;
+        /* dynamic viewport height excludes mobile browser toolbars */
+        height: 100dvh;
         image-rendering: pixelated;
         image-rendering: crisp-edges;
       }
@@ -217,8 +219,8 @@
 
         // Draw the scene into the source canvas at CSS-pixel resolution
         function layout() {
-          var w = window.innerWidth;
-          var h = window.innerHeight;
+          var w = screen.clientWidth;
+          var h = screen.clientHeight;
           screen.width = w;
           screen.height = h;
 
