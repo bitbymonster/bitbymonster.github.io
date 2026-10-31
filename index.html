@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>bitbymonster</title>
+    <style>
+      html, body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      canvas {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      #crtcanvas {
+        display: none;
+        pointer-events: none;
+      }
+      #social {
+        position: fixed;
+        display: block;
+        z-index: 1;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+    </style>
+  </head>
+  <body>
+    <h1 class="sr-only">bitbymonster</h1>
+    <canvas id="screen"></canvas>
+    <canvas id="crtcanvas"></canvas>
+    <a id="social" href="https://www.facebook.com/61595786863567/" aria-label="bitbymonster on Facebook"></a>
+
+    <!-- CRT Shaders -->
+    <!-- Based on PICO-8 CRT framework by ultrabrite (twitter: @SpaceTrucker2k0) -->
+    <!-- Updated with CRT shader by Mattias Gustavsson (twitter: @Mattias_G) -->
+    <!-- https://github.com/mattiasgustavsson/crtview -->
+
+    <!-- common vertex shader -->
+    <script id="common-vertex-shader" type="x-shader/x-vertex">
+      attribute vec4 pos;
+      varying vec2 uv;
+      void main() {
+        gl_Position = vec4(pos.xy, 0, 1);
+        uv = pos.zw;
+      }
+    </script>
+
+    <script id="crt-fragment-shader" type="x-shader/x-fragment">
+      precision mediump float;
+      varying vec2 uv;
+      uniform vec2 resolution;
+      uniform float time;
+      uniform sampler2D backbuffer;
+      uniform sampler2D blurbuffer;
+      vec3 tsample(sampler2D samp, vec2 tc) {
+        vec3 s=pow(abs(texture2D(samp,vec2(tc.x,1.0-tc.y)).rgb),vec3(2.2));
+        return s*vec3(1.25);
+      }
+      vec3 filmic(vec3 lcol) {
+        vec3 x=max(vec3(0),lcol-vec3(0.004));
+        return (x*(6.2*x+0.5))/(x*(6.2*x+1.7)+0.06);
+      }
+      vec2 curve(vec2 uv) {
+        uv=(uv-0.5)*2.0;
+        uv*=vec2(1.049,1.042);
+        uv-=vec2(-0.008,0.008);
+        uv.x*=1.0+pow(abs(uv.y)/5.0,2.0);
+        uv.y*=1.0+pow(abs(uv.x)/4.0,2.0);
+        uv=uv*0.5+0.5;
+        return uv;
+      }
+      highp float rand(vec2 co) {
+        /* iPad needs highp to avoid artifacts */
+        highp float a = 12.9898;
+        highp float b = 78.233;
+        highp float c = 43758.5453;
+        highp float dt = dot(co.xy,vec2(a,b));
+        highp float sn = mod(dt,3.14);
+        return fract(sin(sn) * c);
+      }
+      void main() {
+        /* curve */
+        vec2 curved_uv=mix(curve(uv),uv,0.4);
+        vec2 scuv=curved_uv;
+
+        /* main color, bleed */
+        vec3 col;
+        float x=sin(0.1*time+curved_uv.y*13.0)
+            *sin(0.23*time+curved_uv.y*19.0)
+            *sin(0.3+0.11*time+curved_uv.y*23.0)
+            *0.0012;
+        float o=sin(gl_FragCoord.y/1.5)/resolution.x;
+        x+=o*0.25;
+        x*=0.2;
+        col.r=tsample(backbuffer,vec2(x+scuv.x+0.0009,scuv.y+0.0009)).x+0.02;
+        col.g=tsample(backbuffer,vec2(x+scuv.x+0.0000,scuv.y-0.0011)).y+0.02;
+        col.b=tsample(backbuffer,vec2(x+scuv.x-0.0015,scuv.y+0.0000)).z+0.02;
+
+        float i=clamp(col.r*0.299+col.g*0.587+col.b*0.114,0.0,1.0);
+        i=pow(1.0-pow(i,2.0),1.0);
+        i=(1.0-i)*0.85+0.15;
+
+        /* ghosting */
+        float ghs=0.15;
+        vec3 r=tsample(blurbuffer,
+          vec2(x-0.014*1.0, -0.027)*0.85
+            +0.007*vec2(0.35*sin(1.0/7.0 + 15.0*curved_uv.y + 0.9*time), 0.35*sin(2.0/7.0 + 10.0*curved_uv.y + 1.37*time))
+            +vec2(scuv.x+0.001,scuv.y+0.001)
+          ).xyz*vec3(0.5,0.25,0.25);
+        vec3 g=tsample(blurbuffer,
+          vec2(x-0.019*1.0, -0.020)*0.85
+            +0.007*vec2(0.35*cos(1.0/9.0 + 15.0*curved_uv.y + 0.5*time), 0.35*sin(2.0/9.0 + 10.0*curved_uv.y + 1.50*time))
+            +vec2(scuv.x+0.000,scuv.y-0.002)
+          ).xyz*vec3(0.25,0.5,0.25);
+        vec3 b=tsample(blurbuffer,
+          vec2(x-0.017*1.0, -0.003)*0.85
+            +0.007*vec2(0.35*sin(2.0/3.0 + 15.0*curved_uv.y + 0.7*time), 0.35*cos(2.0/3.0 + 10.0*curved_uv.y + 1.63*time))
+            +vec2(scuv.x-0.002,scuv.y+0.000)
+          ).xyz*vec3(0.25,0.25,0.5);
+
+        vec3 ghost=vec3(0.0);
+        ghost+=vec3(ghs*(1.0-0.299))*pow(clamp(vec3(3.0)*r,vec3(0.0),vec3(1.0)),vec3(2.0))*vec3(i);
+        ghost+=vec3(ghs*(1.0-0.587))*pow(clamp(vec3(3.0)*g,vec3(0.0),vec3(1.0)),vec3(2.0))*vec3(i);
+        ghost+=vec3(ghs*(1.0-0.114))*pow(clamp(vec3(3.0)*b,vec3(0.0),vec3(1.0)),vec3(2.0))*vec3(i);
+        col+=ghost;
+
+        /* level adjustment (curves) */
+        col*=vec3(0.95,1.05,0.95);
+        col=clamp(1.3*col+0.75*col*col+1.25*col*col*col*col*col,vec3(0.0),vec3(10.0));
+
+        /* vignette */
+        float vig=0.1+16.0*curved_uv.x*curved_uv.y*(1.0-curved_uv.x)*(1.0-curved_uv.y);
+        vig=1.5*pow(vig,0.25);
+        vig=(vig>1.0) ? (1.0 + smoothstep(1.0,1.5,vig)*0.2) : vig;
+        col*=vig;
+
+        /* scanlines */
+        float scans=clamp(0.35+0.18*sin(6.0*time+curved_uv.y*resolution.y*1.5),0.0,1.0);
+        float s=pow(scans,0.9);
+        col*=s;
+
+        /* vertical lines (shadow mask) */
+        col*=1.0-0.23*clamp((mod(gl_FragCoord.xy.x,3.0))*0.5,0.0,1.0);
+
+        /* tone map */
+        col=filmic(col);
+
+        /* noise */
+        vec2 seed=curved_uv*resolution.xy;
+        vec3 noise=pow(vec3(rand(seed+time),rand(seed+time*2.0),rand(seed+time*3.0)),vec3(1.5));
+        col-=0.015*noise;
+
+        /* flicker */
+        col*=(1.0-0.0015*(sin(50.0*time+curved_uv.y*2.0)*0.5+0.5));
+
+        /* clamp */
+        if (curved_uv.x < 0.0 || curved_uv.x > 1.0)
+          col*= 0.0;
+        if (curved_uv.y < 0.0 || curved_uv.y > 1.0)
+          col*= 0.0;
+
+        gl_FragColor = vec4(col, 1.0);
+      }
+    </script>
+
+    <script id="blur-fragment-shader" type="x-shader/x-fragment">
+      precision mediump float;
+      varying vec2 uv;
+      uniform vec2 blur;
+      uniform sampler2D texture;
+      void main() {
+        vec4 sum=texture2D(texture,uv)*0.2270270270;
+        sum+=texture2D(texture,vec2(uv.x-4.0*blur.x,uv.y-4.0*blur.y))*0.0162162162;
+        sum+=texture2D(texture,vec2(uv.x-3.0*blur.x,uv.y-3.0*blur.y))*0.0540540541;
+        sum+=texture2D(texture,vec2(uv.x-2.0*blur.x,uv.y-2.0*blur.y))*0.1216216216;
+        sum+=texture2D(texture,vec2(uv.x-1.0*blur.x,uv.y-1.0*blur.y))*0.1945945946;
+        sum+=texture2D(texture,vec2(uv.x+1.0*blur.x,uv.y+1.0*blur.y))*0.1945945946;
+        sum+=texture2D(texture,vec2(uv.x+2.0*blur.x,uv.y+2.0*blur.y))*0.1216216216;
+        sum+=texture2D(texture,vec2(uv.x+3.0*blur.x,uv.y+3.0*blur.y))*0.0540540541;
+        sum+=texture2D(texture,vec2(uv.x+4.0*blur.x,uv.y+4.0*blur.y))*0.0162162162;
+        gl_FragColor=sum;
+      }
+    </script>
+
+    <script>
+      (function() {
+        var LOGO_W = 88, LOGO_H = 46;
+        var ICON = 14;
+
+        var screen = document.getElementById('screen');
+        var crtcanvas = document.getElementById('crtcanvas');
+        var social = document.getElementById('social');
+        var ctx = screen.getContext('2d');
+
+        var logo = new Image();
+        var icons = new Image();
+        var loaded = 0;
+        logo.onload = icons.onload = function() { if (++loaded === 2) start(); };
+        logo.src = 'bitbymonster.png';
+        icons.src = 'social.png';
+
+        var crt = null;
+
+        // Draw the scene into the source canvas at CSS-pixel resolution
+        function layout() {
+          var w = window.innerWidth;
+          var h = window.innerHeight;
+          screen.width = w;
+          screen.height = h;
+
+          // Integer scale so the logo fills about half the viewport
+          var scale = Math.max(1, Math.round(Math.min(w * 0.5 / LOGO_W, h * 0.5 / LOGO_H)));
+          var lw = LOGO_W * scale, lh = LOGO_H * scale;
+          var lx = Math.floor((w - lw) / 2), ly = Math.floor((h - lh) / 2.8);
+
+          var is = ICON * scale;
+          var ix = Math.floor((w - is) / 2);
+          var iy = Math.floor(h - is - Math.max(is * 0.75, h * 0.08));
+
+          ctx.imageSmoothingEnabled = false;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(logo, 0, 0, LOGO_W, LOGO_H, lx, ly, lw, lh);
+          ctx.drawImage(icons, 0, 0, ICON, ICON, ix, iy, is, is);
+
+          social.style.left = ix + 'px';
+          social.style.top = iy + 'px';
+          social.style.width = is + 'px';
+          social.style.height = is + 'px';
+
+          if (crt) {
+            try {
+              crtResize();
+            } catch (e) {
+              // e.g. tainted canvas when opened via file:// - fall back to the plain canvas
+              console.error('CRT disabled:', e);
+              crt = null;
+              crtcanvas.style.display = 'none';
+            }
+          }
+        }
+
+        function start() {
+          try {
+            crtInit();
+          } catch (e) {
+            console.error('CRT unavailable:', e);
+            crt = null;
+          }
+          window.addEventListener('resize', layout);
+          layout();
+          if (crt) {
+            crtcanvas.style.display = 'block';
+            requestAnimationFrame(crtFrame);
+          }
+        }
+
+        // CRT effect
+
+        function compileShader(gl, id, type) {
+          var shader = gl.createShader(type);
+          gl.shaderSource(shader, document.getElementById(id).textContent);
+          gl.compileShader(shader);
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            throw new Error('Shader compile error: ' + gl.getShaderInfoLog(shader));
+          }
+          return shader;
+        }
+
+        function compileProgram(gl, vertexId, fragmentId) {
+          var program = gl.createProgram();
+          var vs = compileShader(gl, vertexId, gl.VERTEX_SHADER);
+          var fs = compileShader(gl, fragmentId, gl.FRAGMENT_SHADER);
+          gl.attachShader(program, vs);
+          gl.attachShader(program, fs);
+          gl.linkProgram(program);
+          gl.deleteShader(vs);
+          gl.deleteShader(fs);
+          if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+            throw new Error('Program link error: ' + gl.getProgramInfoLog(program));
+          }
+          return program;
+        }
+
+        function createTexture(gl) {
+          var texture = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, texture);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          return texture;
+        }
+
+        function crtInit() {
+          var gl = crtcanvas.getContext('webgl');
+          if (!gl) throw new Error('WebGL not supported');
+
+          var quad = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1, 0, 0,
+             1, -1, 1, 0,
+            -1,  1, 0, 1,
+             1,  1, 1, 1
+          ]), gl.STATIC_DRAW);
+
+          crt = {
+            gl: gl,
+            quad: quad,
+            crt: compileProgram(gl, 'common-vertex-shader', 'crt-fragment-shader'),
+            blur: compileProgram(gl, 'common-vertex-shader', 'blur-fragment-shader'),
+            backbuffer: createTexture(gl),
+            blurbuffer: createTexture(gl),
+            framebuffer: gl.createFramebuffer(),
+            startTime: performance.now()
+          };
+        }
+
+        function renderQuad(gl, program) {
+          var posLoc = gl.getAttribLocation(program, 'pos');
+          gl.bindBuffer(gl.ARRAY_BUFFER, crt.quad);
+          gl.enableVertexAttribArray(posLoc);
+          gl.vertexAttribPointer(posLoc, 4, gl.FLOAT, false, 16, 0);
+          gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+        }
+
+        // The scene is static, so the source texture and blur are only rebuilt on resize
+        function crtResize() {
+          var gl = crt.gl;
+          var w = screen.width, h = screen.height;
+          crtcanvas.width = w;
+          crtcanvas.height = h;
+
+          gl.bindTexture(gl.TEXTURE_2D, crt.backbuffer);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, screen);
+
+          gl.bindTexture(gl.TEXTURE_2D, crt.blurbuffer);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, crt.framebuffer);
+          gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, crt.blurbuffer, 0);
+
+          gl.viewport(0, 0, w, h);
+          gl.useProgram(crt.blur);
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, crt.backbuffer);
+          gl.uniform1i(gl.getUniformLocation(crt.blur, 'texture'), 0);
+          gl.uniform2f(gl.getUniformLocation(crt.blur, 'blur'), 1.0 / w, 1.0 / h);
+          renderQuad(gl, crt.blur);
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        }
+
+        function crtFrame() {
+          var gl = crt.gl;
+          var time = (performance.now() - crt.startTime) / 1000.0;
+
+          gl.viewport(0, 0, crtcanvas.width, crtcanvas.height);
+          gl.useProgram(crt.crt);
+          gl.uniform2f(gl.getUniformLocation(crt.crt, 'resolution'), crtcanvas.width, crtcanvas.height);
+          gl.uniform1f(gl.getUniformLocation(crt.crt, 'time'), time);
+
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, crt.backbuffer);
+          gl.uniform1i(gl.getUniformLocation(crt.crt, 'backbuffer'), 0);
+
+          gl.activeTexture(gl.TEXTURE1);
+          gl.bindTexture(gl.TEXTURE_2D, crt.blurbuffer);
+          gl.uniform1i(gl.getUniformLocation(crt.crt, 'blurbuffer'), 1);
+
+          renderQuad(gl, crt.crt);
+          requestAnimationFrame(crtFrame);
+        }
+      })();
+    </script>
+  </body>
+</html>
