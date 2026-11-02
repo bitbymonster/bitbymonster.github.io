@@ -26,7 +26,7 @@
         display: none;
         pointer-events: none;
       }
-      #social {
+      .social {
         position: fixed;
         display: block;
         z-index: 1;
@@ -44,7 +44,9 @@
     <h1 class="sr-only">bitbymonster</h1>
     <canvas id="screen"></canvas>
     <canvas id="crtcanvas"></canvas>
-    <a id="social" href="https://www.facebook.com/61595786863567/" aria-label="bitbymonster on Facebook"></a>
+    <!-- data-sx: x offset of the icon in social.png -->
+    <a class="social" data-sx="0" href="https://www.facebook.com/61595786863567/" aria-label="bitbymonster on Facebook"></a>
+    <a class="social" data-sx="16" href="https://ko-fi.com/bitbymonster" aria-label="Support bitbymonster on Ko-fi"></a>
 
     <!-- CRT Shaders -->
     <!-- Based on PICO-8 CRT framework by ultrabrite (twitter: @SpaceTrucker2k0) -->
@@ -202,10 +204,11 @@
       (function() {
         var LOGO_W = 88, LOGO_H = 46;
         var ICON = 14;
+        var ICON_GAP = 10;
 
         var screen = document.getElementById('screen');
         var crtcanvas = document.getElementById('crtcanvas');
-        var social = document.getElementById('social');
+        var social = document.querySelectorAll('.social');
         var ctx = screen.getContext('2d');
 
         var logo = new Image();
@@ -229,20 +232,25 @@
           var lw = LOGO_W * scale, lh = LOGO_H * scale;
           var lx = Math.floor((w - lw) / 2), ly = Math.floor((h - lh) / 2.8);
 
+          // Row of social icons, centred, with gaps at the same scale
           var is = ICON * scale;
-          var ix = Math.floor((w - is) / 2);
+          var step = (ICON + ICON_GAP) * scale;
+          var ix = Math.floor((w - (social.length * step - ICON_GAP * scale)) / 2);
           var iy = Math.floor(h - is - Math.max(is * 0.75, h * 0.08));
 
           ctx.imageSmoothingEnabled = false;
           ctx.fillStyle = '#000';
           ctx.fillRect(0, 0, w, h);
           ctx.drawImage(logo, 0, 0, LOGO_W, LOGO_H, lx, ly, lw, lh);
-          ctx.drawImage(icons, 0, 0, ICON, ICON, ix, iy, is, is);
 
-          social.style.left = ix + 'px';
-          social.style.top = iy + 'px';
-          social.style.width = is + 'px';
-          social.style.height = is + 'px';
+          social.forEach(function(link, i) {
+            var x = ix + i * step;
+            ctx.drawImage(icons, +link.dataset.sx, 0, ICON, ICON, x, iy, is, is);
+            link.style.left = x + 'px';
+            link.style.top = iy + 'px';
+            link.style.width = is + 'px';
+            link.style.height = is + 'px';
+          });
 
           if (crt) {
             try {
