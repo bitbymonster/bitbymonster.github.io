@@ -1,0 +1,11 @@
+{
+  "name": "Number Bubbles",
+  "short_name": "Bubbles",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#bfe3ff",
+  "theme_color": "#bfe3ff",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
