@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#bfe3ff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="robots" content="noindex">
+<title>Number Bubbles</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#bfe3ff;
+    touch-action:none; overscroll-behavior:none; -webkit-user-select:none; user-select:none;
+    -webkit-touch-callout:none; -webkit-tap-highlight-color:transparent; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; }
+  #start { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:2vmin; background:rgba(191,227,255,.85); font-family:"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+    color:#4b3bb5; cursor:pointer; z-index:2; }
+  #start h1 { margin:0; font-size:9vmin; text-shadow:0 .4vmin 0 #fff; }
+  #play { width:22vmin; height:22vmin; border-radius:50%; background:#7e5cf0; box-shadow:0 1.2vmin 0 #5a3cc8;
+    display:flex; align-items:center; justify-content:center; }
+  #play::before { content:""; border-left:10vmin solid #fff; border-top:6vmin solid transparent;
+    border-bottom:6vmin solid transparent; margin-left:2vmin; }
+  #start.hide { display:none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="start"><h1>Number Bubbles</h1><div id="play"></div></div>
+<script src="game.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+</script>
+</body>
+</html>
