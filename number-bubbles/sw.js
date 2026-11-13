@@ -1,6 +1,7 @@
 // Offline cache: everything the game needs is served from the cache after first load.
-const CACHE = 'number-bubbles-v1';
-const FILES = ['./', 'index.html', 'game.js', 'manifest.webmanifest', 'icon.svg'];
+const CACHE = 'number-bubbles-v2';
+const FILES = ['./', 'index.html', 'game.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png',
+  'icon-maskable-512.png', 'apple-touch-icon.png', 'favicon-48.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
 });

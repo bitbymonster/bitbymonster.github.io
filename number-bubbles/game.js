@@ -22,7 +22,7 @@ function layout() {
   cr = u * 0.13;
   cx = W - cr * 1.4;  cy = H - cr * 1.2;
   sr = cr * 0.85;
-  sx = cx - cr * 0.5; sy = cy - cr * 2.25;
+  sx = cx - cr * 0.5; sy = cy - cr * 2.7;
 }
 function resize() {
   const oW = W, oH = H;
@@ -34,7 +34,7 @@ function resize() {
   layout();
   if (oW) for (const b of bubbles) { b.x *= W / oW; b.y *= H / oH; }
 }
-const obstacles = () => [{ x: cx, y: cy, r: cr * 1.1 }, { x: sx, y: sy, r: sr * 1.02 }];
+const obstacles = () => [{ x: cx, y: cy, r: cr * 1.1 }, { x: sx, y: sy, r: sr * 1.1 }];
 
 // ---------- values: size and colour ----------
 // Bubble size grows with value, scaled to this round's target so big numbers still fit on screen
@@ -117,7 +117,7 @@ const askTarget = () => say(`Can you make ${target}?`);
 let bubbles = [], particles = [];
 let target = 0, round = 0, state = 'menu', wonT = 0, winner = null, idle = 0, lastTarget = 0;
 let nextId = 1, sbS = 1, sbV = 0;           // speech-bubble pop spring
-let look = { x: 0, y: 0 };
+let look = { x: 0, y: 0 }, creatureJump = 0;
 const drags = new Map();
 
 function makeBubble(v, x, y, extra) {
@@ -231,7 +231,7 @@ cv.addEventListener('pointerdown', e => {
   idle = 0;
   const b = topBubbleAt(e.clientX, e.clientY);
   if (!b) {
-    if (Math.hypot(e.clientX - cx, e.clientY - cy) < cr * 1.2 || Math.hypot(e.clientX - sx, e.clientY - sy) < sr) { askTarget(); sbS = 0.8; sbV = 3; }
+    if (Math.hypot(e.clientX - cx, e.clientY - cy) < cr * 1.2 || Math.hypot(e.clientX - sx, e.clientY - sy) < sr * 1.1) { askTarget(); sbS = 0.8; sbV = 3; }
     return;
   }
   cv.setPointerCapture(e.pointerId);
@@ -393,6 +393,7 @@ function drawBubble(b, t, highlight) {
 function drawCreature(t) {
   const won = state === 'won';
   const jump = won ? -Math.abs(Math.sin(wonT * 7)) * cr * 0.35 : Math.sin(t * 2) * cr * 0.02;
+  creatureJump = jump;
   ctx.save(); ctx.translate(cx, cy + jump);
   ctx.lineCap = 'round';
   // feet
@@ -442,17 +443,42 @@ function drawCreature(t) {
   }
   ctx.restore();
 }
-function drawSpeech() {
+// The target is shown as a dark-purple thought cloud made of circles, so it looks nothing like a bubble.
+function drawSpeech(t) {
   if (!target) return;
-  const r = sr * Math.max(0.01, sbS);
+  const pulse = state === 'won' ? 1 + 0.05 * Math.sin(wonT * 10) : 1;
+  const k = Math.max(0.01, sbS) * pulse;
+  const BODY = '#3b2a85', EDGE = '#a78bfa';
+  // circles that make up the cloud (relative to its centre): [x, y, radius]
+  const bob = Math.sin(t * 1.5) * sr * 0.03;
+  const cl = [[0, 0, sr * 0.8]];
+  for (let i = 0; i < 9; i++) {
+    const a = i * 6.2832 / 9 + 0.3, w = Math.sin(t * 2.2 + i * 1.3);
+    cl.push([Math.cos(a) * sr * (0.72 + 0.02 * w), Math.sin(a) * sr * (0.72 + 0.02 * w), sr * (0.34 + 0.03 * w)]);
+  }
+  // trail of little thought circles down to the creature's head, growing towards the cloud
+  const ax = sx + sr * 0.1, ay = sy + sr * 0.95, bx = cx, by = cy + creatureJump - cr * 1.12;
+  const trail = [[0.3, 0.07], [0.56, 0.11], [0.82, 0.16]].map(([f, rr], i) => {
+    const w = Math.sin(t * 2.6 - i * 0.9);
+    return [bx + (ax - bx) * f, by + (ay - by) * f + w * cr * 0.03, cr * rr * (1 + 0.1 * w)];
+  });
   ctx.save();
-  ctx.fillStyle = '#fff'; ctx.strokeStyle = '#7e5cf0'; ctx.lineWidth = sr * 0.07; ctx.lineJoin = 'round';
-  ctx.beginPath();                                             // tail
-  ctx.moveTo(sx + sr * 0.15, sy + r * 0.85); ctx.lineTo(cx - cr * 0.1, cy - cr * 1.1); ctx.lineTo(sx + sr * 0.65, sy + r * 0.7); ctx.closePath();
-  ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(sx + sr * 0.2, sy + r * 0.8); ctx.lineTo(sx + sr * 0.62, sy + r * 0.68); ctx.strokeStyle = '#fff'; ctx.lineWidth = sr * 0.1; ctx.stroke();
-  ctx.translate(sx, sy); drawBubbleFace(target, r * 0.8, false);   // the target as a bubble, so he can match colours
+  ctx.translate(sx, sy + bob); ctx.scale(k, k); ctx.translate(-sx, -(sy + bob));
+  const circles = cl.map(([x, y, r]) => [sx + x, sy + bob + y, r]).concat(trail);
+  ctx.fillStyle = EDGE;                         // pass 1: slightly larger circles give the whole cloud an outline
+  for (const [x, y, r] of circles) { ctx.beginPath(); ctx.arc(x, y, r + sr * 0.06, 0, 6.2832); ctx.fill(); }
+  ctx.fillStyle = BODY;                         // pass 2: the dark fill
+  for (const [x, y, r] of circles) { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,.10)';      // soft shine on the cloud
+  ctx.beginPath(); ctx.ellipse(sx - sr * 0.35, sy + bob - sr * 0.5, sr * 0.3, sr * 0.14, -0.6, 0, 6.2832); ctx.fill();
+  ctx.restore();
+  ctx.save();                                   // the number, plain white on the dark cloud
+  ctx.translate(sx, sy + bob); drawNumber(target, 0, 0, sr * 0.85 * Math.min(1, k));
+  for (let i = 0; i < 3; i++) {                 // twinkling sparkles around the cloud
+    const a = [-2.3, -0.9, 0.25][i], d = sr * 1.32, tw = 0.5 + 0.5 * Math.sin(t * 3 + i * 2.1);
+    ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.6 * tw})`;
+    starPath(Math.cos(a) * d, Math.sin(a) * d, sr * (0.07 + 0.07 * tw) * k, t * 0.5 + i); ctx.fill();
+  }
   ctx.restore();
 }
 function drawParticles() {
@@ -467,7 +493,7 @@ function draw(t) {
   const bg = ctx.createLinearGradient(0, 0, 0, H);
   bg.addColorStop(0, '#bfe3ff'); bg.addColorStop(1, '#e6d9ff');
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  drawCreature(t); drawSpeech();
+  drawCreature(t); drawSpeech(t);
   const cands = new Set(); for (const [, d] of drags) if (d.cand) cands.add(d.cand.id);
   for (const b of bubbles) drawBubble(b, t, cands.has(b.id));
   drawParticles();

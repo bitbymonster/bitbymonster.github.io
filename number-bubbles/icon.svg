@@ -1,8 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#bfe3ff"/>
-  <circle cx="170" cy="190" r="110" fill="#ff9f43"/><circle cx="145" cy="160" r="30" fill="#fff" opacity=".5"/>
-  <circle cx="340" cy="300" r="140" fill="#54a0ff"/><circle cx="305" cy="260" r="38" fill="#fff" opacity=".5"/>
-  <circle cx="190" cy="390" r="70" fill="#ff78c4"/>
-  <text x="170" y="222" font-family="Arial,sans-serif" font-weight="900" font-size="110" text-anchor="middle" fill="#fff" stroke="#8a4b00" stroke-width="8" paint-order="stroke">3</text>
-  <text x="340" y="340" font-family="Arial,sans-serif" font-weight="900" font-size="140" text-anchor="middle" fill="#fff" stroke="#1d4f99" stroke-width="10" paint-order="stroke">7</text>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#bfe3ff"/><stop offset="1" stop-color="#e1d4ff"/></linearGradient>
+    <radialGradient id="body" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#b9a4ff"/><stop offset="1" stop-color="#7e5cf0"/></radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g stroke="#fff" stroke-opacity=".75" stroke-width="5">
+    <circle cx="92" cy="104" r="64" fill="#ff8a1f"/><circle cx="436" cy="112" r="50" fill="#18c8de"/>
+    <circle cx="78" cy="424" r="52" fill="#ff6fb5"/><circle cx="440" cy="412" r="68" fill="#ffd21f"/>
+  </g>
+  <g fill="#fff" fill-opacity=".6">
+    <ellipse cx="70" cy="80" rx="18" ry="10" transform="rotate(-40 70 80)"/><ellipse cx="420" cy="94" rx="14" ry="8" transform="rotate(-40 420 94)"/>
+    <ellipse cx="60" cy="404" rx="14" ry="8" transform="rotate(-40 60 404)"/><ellipse cx="416" cy="384" rx="19" ry="10" transform="rotate(-40 416 384)"/>
+  </g>
+  <g stroke="#5b3fcc" stroke-width="9" stroke-linecap="round" fill="none">
+    <path d="M214 168 Q190 118 204 86"/><path d="M298 168 Q322 118 308 86"/>
+  </g>
+  <circle cx="204" cy="78" r="21" fill="#ff78c4"/><circle cx="308" cy="78" r="21" fill="#feca57"/>
+  <circle cx="256" cy="300" r="152" fill="url(#body)"/>
+  <ellipse cx="256" cy="372" rx="92" ry="70" fill="#e1d7ff"/>
+  <ellipse cx="204" cy="268" rx="40" ry="46" fill="#fff"/><ellipse cx="308" cy="268" rx="40" ry="46" fill="#fff"/>
+  <circle cx="210" cy="274" r="21" fill="#2b2d42"/><circle cx="314" cy="274" r="21" fill="#2b2d42"/>
+  <circle cx="218" cy="265" r="7" fill="#fff"/><circle cx="322" cy="265" r="7" fill="#fff"/>
+  <circle cx="148" cy="332" r="19" fill="#ff78c4" fill-opacity=".5"/><circle cx="364" cy="332" r="19" fill="#ff78c4" fill-opacity=".5"/>
+  <path d="M212 330 Q256 380 300 330" fill="none" stroke="#3a2a7a" stroke-width="11" stroke-linecap="round"/>
 </svg>
