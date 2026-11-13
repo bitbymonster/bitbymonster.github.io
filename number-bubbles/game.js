@@ -40,13 +40,27 @@ const obstacles = () => [{ x: cx, y: cy, r: cr * 1.1 }, { x: sx, y: sy, r: sr * 
 // Bubble size grows with value, scaled to this round's target so big numbers still fit on screen
 // and the smallest bubbles stay easy to tap.
 const rad = v => u * (0.04 + 0.11 * Math.sqrt(v / Math.max(target, 5)));
-const HUES = [0, 28, 48, 100, 165, 195, 218, 265, 320, 18];
-function colour(v) {
-  if (v <= 10) return { h: HUES[v - 1], s: v === 10 ? 45 : 85, l: v === 10 ? 52 : 60 };
-  // golden-angle hue steps keep neighbouring values visibly different; s/l wobble separates near-matches
-  return { h: (v * 137.508) % 360, s: 68 + (v % 2) * 17, l: 50 + (v % 3) * 6 };
+
+// Each digit has its own colour, so a bubble's colours show its place value:
+//   ones digit  -> centre, full colour       (1 red, 2 orange, 3 yellow, 4 green, 5 cyan,
+//   tens digit  -> outer ring, light colour    6 indigo, 7 rainbow, 8 pink, 9 grey)
+//   hundreds    -> stippled outermost area     (10 is white; 100 is stippled red + light red)
+// A zero digit has no layer, so 20 is all light orange and 7 is all rainbow.
+const BASE = { 1: '#ff3b3b', 2: '#ff8a1f', 3: '#ffd21f', 4: '#3dbb4a', 5: '#18c8de', 6: '#4a3fc4', 8: '#ff6fb5', 9: '#8a909c' };
+function mix(hex, k) {                       // blend towards white
+  const n = parseInt(hex.slice(1), 16);
+  return `rgb(${[n >> 16 & 255, n >> 8 & 255, n & 255].map(x => Math.round(x + (255 - x) * k))})`;
 }
-const hsl = (c, dl = 0, ds = 0) => `hsl(${c.h} ${Math.min(100, c.s + ds)}% ${Math.min(95, c.l + dl)}%)`;
+const rainbow = (i, light) => `hsl(${i * 30} 90% ${light ? 80 : 55}%)`;
+function layersOf(v) {                       // outermost first
+  const h = Math.floor(v / 100) % 10, t = Math.floor(v / 10) % 10, o = v % 10, L = [];
+  if (h) L.push({ k: 'stipple', bg: h === 7 ? '#f3f3f3' : mix(BASE[h], 0.6), dot: h === 7 ? null : BASE[h] });
+  if (t) L.push(t === 1 ? { k: 'solid', c: '#ffffff' } : t === 7 ? { k: 'rainbow', light: true } : { k: 'solid', c: mix(BASE[t], 0.55) });
+  if (o) L.push(o === 7 ? { k: 'rainbow', light: false } : { k: 'solid', c: BASE[o] });
+  return L;
+}
+const LAYER_R = [[], [1], [1, 0.68], [1, 0.84, 0.66]];
+const sparkCols = v => layersOf(v).flatMap(l => l.k === 'solid' ? [l.c] : l.k === 'stipple' ? [l.dot || RAINBOW[0]] : RAINBOW.slice(0, 4));
 
 // ---------- audio (synthesised, so nothing to download) ----------
 let ac = null;
@@ -168,8 +182,7 @@ function mergeCandidate(b) {
 function merge(a, t) {                     // a is dragged onto t
   t.v += a.v; t.s = 0.7; t.sv = 5; // pop
   bubbles.splice(bubbles.indexOf(a), 1);
-  const c = colour(t.v);
-  burst(t.x, t.y, 12, [hsl(c), hsl(c, 20), '#fff'], u * 0.5);
+  burst(t.x, t.y, 12, sparkCols(t.v).concat('#fff'), u * 0.5);
   sMerge(t.v);
   checkWin(t);
 }
@@ -181,7 +194,7 @@ function split(b) {
   b.vx = -Math.cos(ang) * u * 0.5; b.vy = -Math.sin(ang) * u * 0.5;
   nb.vx = Math.cos(ang) * u * 0.5;  nb.vy = Math.sin(ang) * u * 0.5;
   bubbles.push(nb);
-  burst(b.x, b.y, 8, [hsl(colour(a)), hsl(colour(c)), '#fff'], u * 0.4);
+  burst(b.x, b.y, 8, sparkCols(a).concat(sparkCols(c), '#fff'), u * 0.4);
   sSplit(a, c);
   checkWin(b) || checkWin(nb);
 }
@@ -316,33 +329,63 @@ function starPath(x, y, r, rot) {
   }
   ctx.closePath();
 }
-function drawNumber(v, x, y, r, c) {
+function drawNumber(v, x, y, r) {
   const digits = String(v).length;
   ctx.font = `800 ${r * (digits > 2 ? 0.7 : digits > 1 ? 0.95 : 1.15)}px "Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round'; ctx.lineWidth = r * 0.16;
-  ctx.strokeStyle = hsl(c, -30); ctx.strokeText(v, x, y + r * 0.05);
+  ctx.strokeStyle = '#2a2150'; ctx.strokeText(v, x, y + r * 0.05);
   ctx.fillStyle = '#fff'; ctx.fillText(v, x, y + r * 0.05);
+}
+function paintDisc(p, rr) {                  // one coloured layer, centred on the origin
+  ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.2832);
+  if (p.k === 'solid') { ctx.fillStyle = p.c; ctx.fill(); }
+  else if (p.k === 'rainbow') {
+    for (let i = 0; i < 12; i++) {           // 12 wedges around the bubble (slight overlap hides seams)
+      ctx.beginPath(); ctx.moveTo(0, 0);
+      ctx.arc(0, 0, rr, (i * 30 - 91) * Math.PI / 180, (i * 30 + 31 - 90) * Math.PI / 180);
+      ctx.fillStyle = rainbow(i, p.light); ctx.fill();
+    }
+  } else {                                   // stippled: dots on a light background
+    ctx.fillStyle = p.bg; ctx.fill(); ctx.save(); ctx.clip();
+    const sp = rr * 0.19, N = Math.ceil(rr / sp) + 1;
+    for (let j = -N; j <= N; j++) for (let i = -N; i <= N; i++) {
+      const h1 = ((i * 73856093) ^ (j * 19349663)) >>> 0, a = (h1 % 1000) / 1000, b = ((h1 >>> 10) % 1000) / 1000;
+      const x = (i + (j & 1) * 0.5) * sp + (a - 0.5) * sp * 0.4, y = j * sp * 0.866 + (b - 0.5) * sp * 0.4;
+      if (x * x + y * y > (rr + sp) * (rr + sp)) continue;
+      ctx.fillStyle = p.dot || rainbow(((i + j) % 12 + 12) % 12, false);
+      ctx.beginPath(); ctx.arc(x, y, sp * (0.24 + 0.1 * a), 0, 6.2832); ctx.fill();
+    }
+    ctx.restore();
+  }
+  const g = ctx.createRadialGradient(-rr * 0.3, -rr * 0.35, rr * 0.1, 0, 0, rr);   // glassy shading
+  g.addColorStop(0, 'rgba(255,255,255,.45)'); g.addColorStop(0.6, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(30,20,80,.12)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rr, 0, 6.2832); ctx.fill();
+}
+function drawBubbleFace(v, r, lift) {        // coloured layers, rim, shine and number; origin = centre
+  const L = layersOf(v), rs = LAYER_R[L.length];
+  L.forEach((p, i) => {
+    if (i === 1) ctx.shadowColor = 'transparent';     // drop shadow only from the outermost layer
+    if (i === 0 && lift) { ctx.shadowColor = 'rgba(40,30,90,.35)'; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetY = r * 0.15; }
+    paintDisc(p, r * rs[i]);
+  });
+  ctx.shadowColor = 'transparent';
+  ctx.lineWidth = r * 0.04; ctx.strokeStyle = 'rgba(43,33,80,.3)';
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,.6)';
+  ctx.beginPath(); ctx.ellipse(-r * 0.38, -r * 0.45, r * 0.22, r * 0.12, -0.7, 0, 6.2832); ctx.fill();
+  drawNumber(v, 0, 0, r);
 }
 function drawBubble(b, t, highlight) {
   if (b.delay > 0) return;
   const r = rad(b.v) * b.s * (b.drag ? 1.07 : 1);
   if (r < 1) return;
-  const c = colour(b.v);
   const wob = b.drag ? 0 : Math.sin(t * 1.6 + b.ph) * r * 0.03;
   ctx.save();
   ctx.translate(b.x + (b.wig > 0 ? Math.sin(b.wig * 50) * r * 0.12 : 0), b.y + wob);
   if (b.rot) ctx.rotate(b.rot * (b.fly ? Math.sin(t * 4 + b.ph) : 1));
   ctx.globalAlpha = b.a;
-  if (b.drag) { ctx.shadowColor = 'rgba(40,30,90,.35)'; ctx.shadowBlur = r * 0.35; ctx.shadowOffsetY = r * 0.15; }
-  const g = ctx.createRadialGradient(-r * 0.3, -r * 0.35, r * 0.1, 0, 0, r);
-  g.addColorStop(0, hsl(c, 20, -10)); g.addColorStop(1, hsl(c));
-  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r, 0, 6.2832); ctx.fill();
-  ctx.shadowColor = 'transparent';
-  ctx.lineWidth = r * 0.06; ctx.strokeStyle = 'rgba(255,255,255,.75)'; ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,.55)';
-  ctx.beginPath(); ctx.ellipse(-r * 0.38, -r * 0.45, r * 0.22, r * 0.12, -0.7, 0, 6.2832); ctx.fill();
-  drawNumber(b.v, 0, 0, r, c);
+  drawBubbleFace(b.v, r, b.drag);
   if (highlight) { ctx.lineWidth = r * 0.09; ctx.strokeStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = r * 0.4;
     ctx.beginPath(); ctx.arc(0, 0, r * 1.08, 0, 6.2832); ctx.stroke(); }
   ctx.restore();
@@ -409,7 +452,7 @@ function drawSpeech() {
   ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(sx + sr * 0.2, sy + r * 0.8); ctx.lineTo(sx + sr * 0.62, sy + r * 0.68); ctx.strokeStyle = '#fff'; ctx.lineWidth = sr * 0.1; ctx.stroke();
-  drawNumber(target, sx, sy, r * 0.95, colour(target));
+  ctx.translate(sx, sy); drawBubbleFace(target, r * 0.8, false);   // the target as a bubble, so he can match colours
   ctx.restore();
 }
 function drawParticles() {
