@@ -5,7 +5,11 @@
 'use strict';
 
 const params = new URLSearchParams(location.search);
-const MAX_TARGET = Math.max(3, Math.min(30, +params.get('max') || 10)); // ?max=20 for bigger numbers
+// Target range, e.g. ?min=2&max=10 for a little one, or ?min=50&max=200 for more of a challenge.
+const intParam = (k, lo, hi) => { const n = parseInt(params.get(k), 10); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null; };
+let MAX_TARGET = intParam('max', 2, 999) ?? 100;
+let MIN_TARGET = intParam('min', 2, 999) ?? (MAX_TARGET >= 15 ? 15 : 2);
+if (MIN_TARGET > MAX_TARGET) [MIN_TARGET, MAX_TARGET] = [MAX_TARGET, MIN_TARGET];
 
 // ---------- canvas / layout ----------
 const cv = document.getElementById('c');
@@ -33,11 +37,14 @@ function resize() {
 const obstacles = () => [{ x: cx, y: cy, r: cr * 1.1 }, { x: sx, y: sy, r: sr * 1.02 }];
 
 // ---------- values: size and colour ----------
-const rad = v => u * (0.035 + 0.03 * Math.sqrt(v));
+// Bubble size grows with value, scaled to this round's target so big numbers still fit on screen
+// and the smallest bubbles stay easy to tap.
+const rad = v => u * (0.04 + 0.11 * Math.sqrt(v / Math.max(target, 5)));
 const HUES = [0, 28, 48, 100, 165, 195, 218, 265, 320, 18];
 function colour(v) {
   if (v <= 10) return { h: HUES[v - 1], s: v === 10 ? 45 : 85, l: v === 10 ? 52 : 60 };
-  return { h: (v * 47) % 360, s: 75, l: 56 };
+  // golden-angle hue steps keep neighbouring values visibly different; s/l wobble separates near-matches
+  return { h: (v * 137.508) % 360, s: 68 + (v % 2) * 17, l: 50 + (v % 3) * 6 };
 }
 const hsl = (c, dl = 0, ds = 0) => `hsl(${c.h} ${Math.min(100, c.s + ds)}% ${Math.min(95, c.l + dl)}%)`;
 
@@ -128,8 +135,8 @@ function placeAll(vals) {
 
 function newRound() {
   round++;
-  const hi = Math.min(MAX_TARGET, 4 + round);       // gently increasing difficulty
-  do { target = 2 + Math.floor(Math.random() * (hi - 1)); } while (target === lastTarget && hi > 2);
+  do { target = MIN_TARGET + Math.floor(Math.random() * (MAX_TARGET - MIN_TARGET + 1)); }
+  while (target === lastTarget && MAX_TARGET > MIN_TARGET);
   lastTarget = target;
   bubbles = [];
   placeAll(genValues(target)).forEach((p, i) => bubbles.push(makeBubble(p.v, p.x, p.y, { delay: 0.1 + i * 0.09 })));
@@ -311,7 +318,7 @@ function starPath(x, y, r, rot) {
 }
 function drawNumber(v, x, y, r, c) {
   const digits = String(v).length;
-  ctx.font = `800 ${r * (digits > 1 ? 0.95 : 1.15)}px "Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif`;
+  ctx.font = `800 ${r * (digits > 2 ? 0.7 : digits > 1 ? 0.95 : 1.15)}px "Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.lineJoin = 'round'; ctx.lineWidth = r * 0.16;
   ctx.strokeStyle = hsl(c, -30); ctx.strokeText(v, x, y + r * 0.05);
@@ -445,6 +452,6 @@ startEl.addEventListener('pointerdown', e => {
 });
 
 // test hook (harmless): lets automated checks read state
-window.__nb = { get bubbles() { return bubbles; }, get target() { return target; }, get state() { return state; }, rad,
+window.__nb = { newRound, get bubbles() { return bubbles; }, get target() { return target; }, get state() { return state; }, rad,
   get creature() { return { cx, cy, cr }; } };
 })();
